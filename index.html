@@ -73,7 +73,10 @@ h3 { font-size: 1rem; }
     linear-gradient(135deg, #446575 49%, transparent 51%) calc(100% - 10px) 55% / 6px 6px no-repeat,
     var(--paper);
 }
-.add-project { color: #f2fbff; background: #174858; border: 1px solid #6b939e; min-height: 2.55rem; font-size: .875rem; }
+.project-action { color: #f2fbff; background: #174858; border: 1px solid #6b939e; min-height: 2.55rem; font-size: .875rem; }
+.project-action:disabled { opacity: .55; cursor: default; }
+#projectMessage { display: block; margin-top: .55rem; font-size: .875rem; color: #d8e9ef; }
+#projectMessage:empty { display: none; }
 .dates { display: grid; grid-template-columns: 1fr 1fr; align-self: stretch; align-content: end; gap: .7rem 1.35rem; min-width: 16.5rem; }
 .dates div { border-left: 2px solid #6c959d; padding-left: .75rem; }
 .dates .date-primary { grid-column: 1 / -1; border-color: #c9f58f; }
@@ -132,10 +135,12 @@ progress::-moz-progress-bar { background: var(--accent); border-radius: 1rem; }
 .detail li + li { margin-top: .44rem; }
 .step-tip { background: #fff6e7; border-left: 3px solid #d79b45; color: #674b21; padding: .58rem .72rem; margin: .7rem 0; font-size: .9rem; }
 .notes { border-top: 1px solid var(--line); margin-top: 1rem; padding-top: .85rem; display: grid; gap: .45rem; }
-.notes label { font-weight: 730; }
+.note-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .45rem; }
+.note-heading button { font-size: .875rem; }
+#noteText { white-space: pre-wrap; overflow-wrap: anywhere; }
 #noteContext, #noteStatus { color: var(--muted); font-size: .8125rem; }
 #noteStatus:empty { display: none; }
-.notes textarea { background: #fbfcfe; }
+#note { background: #fbfcfe; }
 
 .faq { padding: clamp(1rem, 3vw, 2rem); max-width: 55rem; }
 .faq h2 { font-size: 1.5rem; margin-bottom: .7rem; }
@@ -152,6 +157,10 @@ dialog::backdrop { background: #13213178; }
 dialog form, .dialog-body { display: grid; gap: .7rem; }
 .dialog-actions { display: flex; gap: .5rem; justify-content: end; margin-top: .45rem; }
 .primary { background: var(--accent-dark); color: white; border-color: var(--accent-dark); }
+.danger { background: #a12433; color: white; border-color: #a12433; }
+#deleteProjectDescription { overflow-wrap: anywhere; }
+.dialog-error { color: #a12433; font-size: .875rem; }
+.dialog-error:empty { display: none; }
 
 @media (max-width: 63rem) {
   .workspace { grid-template-columns: minmax(14rem, 1fr) minmax(17rem, 1.75fr); }
@@ -213,8 +222,10 @@ dialog form, .dialog-body { display: grid; gap: .7rem; }
         <div class="context">
           <label for="month">考勤月份<input type="month" id="month" min="2000-01" max="2199-12" required></label>
           <label for="project">專案<select id="project"></select></label>
-          <button type="button" class="add-project" id="addProject">＋ 新增專案</button>
+          <button type="button" class="project-action" id="addProject">＋ 新增專案</button>
+          <button type="button" class="project-action" id="deleteProject" disabled>刪除專案</button>
         </div>
+        <output id="projectMessage" role="status"></output>
       </div>
       <dl class="dates">
         <div class="date-primary"><dt>考勤區間</dt><dd id="period"></dd></div>
@@ -270,12 +281,15 @@ dialog form, .dialog-body { display: grid; gap: .7rem; }
             <h3 id="imageGalleryTitle">操作截圖</h3>
             <div id="imageGrid" class="image-grid"></div>
           </section>
-          <div class="notes">
-            <label for="note">本月筆記</label>
-            <span id="noteContext"></span>
-            <textarea id="note" rows="5" maxlength="20000" placeholder="記下待確認事項或下次操作要留意的地方。"></textarea>
+          <section class="notes" aria-labelledby="notesTitle">
+            <div class="note-heading">
+              <h3 id="notesTitle">本月筆記</h3>
+              <button type="button" id="editNote">編輯筆記</button>
+            </div>
+            <p id="noteContext"></p>
+            <p id="noteText"></p>
             <span id="noteStatus" role="status"></span>
-          </div>
+          </section>
         </div>
       </article>
     </section>
@@ -304,6 +318,30 @@ dialog form, .dialog-body { display: grid; gap: .7rem; }
       <div class="dialog-actions">
         <button type="button" id="cancelProject">取消</button>
         <button type="submit" class="primary">新增</button>
+      </div>
+    </form>
+  </dialog>
+  <dialog id="deleteProjectDialog" aria-labelledby="deleteProjectTitle" aria-describedby="deleteProjectDescription">
+    <div class="dialog-body">
+      <h2 id="deleteProjectTitle">刪除專案</h2>
+      <p id="deleteProjectDescription">刪除「<strong id="deleteProjectName"></strong>」會一併移除這個專案所有月份的進度和筆記。</p>
+      <p id="deleteProjectError" class="dialog-error" role="alert"></p>
+      <div class="dialog-actions">
+        <button type="button" id="cancelDeleteProject" autofocus>取消</button>
+        <button type="button" id="confirmDeleteProject" class="danger">確認刪除</button>
+      </div>
+    </div>
+  </dialog>
+  <dialog id="noteDialog" aria-labelledby="noteDialogTitle">
+    <form id="noteForm">
+      <h2 id="noteDialogTitle">編輯筆記</h2>
+      <label for="note" id="noteLabel">本月筆記</label>
+      <textarea id="note" rows="5" maxlength="20000" aria-describedby="noteHelp" autofocus></textarea>
+      <p id="noteHelp">同一專案和步驟的下個月份會沿用最近一份筆記。清空後儲存，即可停止沿用先前的筆記。</p>
+      <p id="noteError" class="dialog-error" role="alert"></p>
+      <div class="dialog-actions">
+        <button type="button" id="cancelNote">取消</button>
+        <button type="submit" class="primary">儲存筆記</button>
       </div>
     </form>
   </dialog>
@@ -511,7 +549,10 @@ function restore(value) {
       const entry = object(data)
       const status = Object.hasOwn(statuses, entry.status) ? entry.status : 'todo'
       const note = typeof entry.note === 'string' ? entry.note.slice(0, 20000) : ''
-      if (status !== 'todo' || note) cleanGroup[id] = { status, note }
+      const noteCleared = !note && entry.noteCleared === true
+      if (status !== 'todo' || note || noteCleared) {
+        cleanGroup[id] = noteCleared ? { status, note, noteCleared } : { status, note }
+      }
     }
     if (Object.keys(cleanGroup).length) clean.records[key] = cleanGroup
   }
@@ -535,9 +576,9 @@ const record = id => state.records[groupKey()]?.[id] ?? { status: 'todo', note: 
 const starred = id => state.stars.includes(id)
 const resolved = id => ['done', 'na'].includes(record(id).status)
 
-function save() {
+function save(nextState = state) {
   try {
-    localStorage.setItem(storageKey, JSON.stringify(state))
+    localStorage.setItem(storageKey, JSON.stringify(nextState))
     $('storageWarning').hidden = true
     return true
   } catch {
@@ -546,15 +587,36 @@ function save() {
   }
 }
 
-function updateRecord(id, fields) {
+function stateWithRecord(id, fields) {
   const key = groupKey()
-  const bucket = state.records[key] ?? {}
+  const records = { ...state.records }
+  const bucket = { ...records[key] }
   const next = { ...record(id), ...fields }
-  if (next.status === 'todo' && !next.note) delete bucket[id]
+  if (next.status === 'todo' && !next.note && !next.noteCleared) delete bucket[id]
   else bucket[id] = next
-  if (Object.keys(bucket).length) state.records[key] = bucket
-  else delete state.records[key]
-  return save()
+  if (Object.keys(bucket).length) records[key] = bucket
+  else delete records[key]
+  return { ...state, records }
+}
+
+function updateRecord(id, fields) {
+  state = stateWithRecord(id, fields)
+  save()
+}
+
+function noteForStep(id) {
+  const prefix = state.activeProject + '/'
+  let month = ''
+  let text = ''
+  for (const [key, group] of Object.entries(state.records)) {
+    if (!key.startsWith(prefix)) continue
+    const candidateMonth = key.slice(prefix.length)
+    const item = group[id]
+    if ((!item?.note && !item?.noteCleared) || candidateMonth > state.month || candidateMonth <= month) continue
+    month = candidateMonth
+    text = item.note
+  }
+  return { month, text }
 }
 
 const cleanSearch = text => text.toLocaleLowerCase('zh-TW').replace(/\s+/g, '')
@@ -575,6 +637,10 @@ function renderContext() {
   const list = $('project')
   list.replaceChildren(...state.projects.map(item => new Option(item.name, item.id)))
   list.value = state.activeProject
+  const deleteProjectButton = $('deleteProject')
+  deleteProjectButton.disabled = state.activeProject === defaultProject.id
+  deleteProjectButton.title = deleteProjectButton.disabled ? '預設專案會保留' : ''
+  $('projectMessage').textContent = ''
   const [year, index] = state.month.split('-').map(Number)
   const previous = new Date(year, index - 2, 26)
   const previousLabel = (previous.getFullYear() === year ? '' : previous.getFullYear() + '/') +
@@ -654,8 +720,10 @@ function renderDetail() {
   $('stepTip').hidden = !step.tip
   $('stepTip').textContent = step.tip ?? ''
   const project = state.projects.find(item => item.id === state.activeProject)
-  $('noteContext').textContent = project.name + ' · ' + state.month
-  $('note').value = data.note
+  const note = noteForStep(step.id)
+  const source = note.text && note.month < state.month ? ' · 沿用 ' + note.month : ''
+  $('noteContext').textContent = project.name + ' · ' + state.month + source
+  $('noteText').textContent = note.text || '尚無筆記。'
   $('noteStatus').textContent = ''
   document.querySelectorAll('[data-status]').forEach(item =>
     item.setAttribute('aria-pressed', String(item.dataset.status === data.status)))
@@ -738,10 +806,29 @@ document.querySelectorAll('[data-filter]').forEach(item => {
 })
 
 $('search').addEventListener('input', renderAll)
-$('note').addEventListener('input', event => {
-  if (!selectedId) return
-  $('noteStatus').textContent = updateRecord(selectedId, { note: event.target.value })
-    ? '已儲存至此瀏覽器。' : '尚未儲存，請先匯出備份。'
+const noteDialog = $('noteDialog')
+$('editNote').addEventListener('click', () => {
+  const step = byId.get(selectedId)
+  if (!step) return
+  $('noteLabel').textContent = state.month + ' · ' + step.title
+  $('note').value = noteForStep(step.id).text
+  $('noteError').textContent = ''
+  noteDialog.showModal()
+})
+$('cancelNote').addEventListener('click', () => noteDialog.close())
+$('noteForm').addEventListener('submit', event => {
+  event.preventDefault()
+  if (!noteDialog.open || !selectedId) return
+  const note = $('note').value
+  const nextState = stateWithRecord(selectedId, { note, noteCleared: !note })
+  if (!save(nextState)) {
+    $('noteError').textContent = '瀏覽器目前無法儲存，請保留此視窗並重試。'
+    return
+  }
+  state = nextState
+  noteDialog.close()
+  renderDetail()
+  $('noteStatus').textContent = '筆記已儲存。'
 })
 
 $('month').addEventListener('change', event => {
@@ -782,6 +869,38 @@ $('projectForm').addEventListener('submit', event => {
   renderContext()
   renderAll()
   projectDialog.close()
+})
+
+const deleteProjectDialog = $('deleteProjectDialog')
+let projectToDelete
+$('deleteProject').addEventListener('click', () => {
+  const project = state.projects.find(item => item.id === state.activeProject)
+  if (!project || project.id === defaultProject.id) return
+  projectToDelete = project
+  $('deleteProjectName').textContent = project.name
+  $('deleteProjectError').textContent = ''
+  deleteProjectDialog.showModal()
+})
+$('cancelDeleteProject').addEventListener('click', () => deleteProjectDialog.close())
+$('confirmDeleteProject').addEventListener('click', () => {
+  if (!deleteProjectDialog.open || !projectToDelete) return
+  const { id, name } = projectToDelete
+  const nextState = {
+    ...state,
+    projects: state.projects.filter(item => item.id !== id),
+    activeProject: state.activeProject === id ? defaultProject.id : state.activeProject,
+    records: Object.fromEntries(Object.entries(state.records).filter(([key]) => !key.startsWith(id + '/'))),
+  }
+  if (!save(nextState)) {
+    $('deleteProjectError').textContent = '瀏覽器目前無法儲存變更，專案已保留。'
+    return
+  }
+  state = nextState
+  deleteProjectDialog.close()
+  renderContext()
+  renderAll()
+  $('project').focus()
+  $('projectMessage').textContent = '已刪除「' + name + '」。'
 })
 
 function showFaq(show) {
